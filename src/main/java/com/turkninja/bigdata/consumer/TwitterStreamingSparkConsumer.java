@@ -1,5 +1,6 @@
 package com.turkninja.bigdata.consumer;
 
+import com.turkninja.bigdata.repository.ElasticsearchRepository;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.log4j.Logger;
 import org.apache.spark.SparkConf;
@@ -24,14 +25,17 @@ public class TwitterStreamingSparkConsumer {
 
     private static Map<String, Object> kafkaParams = new HashMap<>();
 
-    private static Collection<String> topics = Arrays.asList("bigdata-twitter");
 
-    static PairFunction<ConsumerRecord<String, String>, String, String> pairFunction = new  PairFunction<ConsumerRecord<String, String>, String, String>(){
+
+    private static PairFunction<ConsumerRecord<String, String>, String, String> pairFunction = new  PairFunction<ConsumerRecord<String, String>, String, String>(){
         @Override
         public Tuple2<String, String> call(ConsumerRecord<String, String> record) throws Exception {
             return new Tuple2<>(record.key(), record.value());
         }
     };
+
+    private static ElasticsearchRepository elasticsearchRepository = new ElasticsearchRepository();
+
 
     static {
         kafkaParams.put("bootstrap.servers", "localhost:9092");
@@ -41,9 +45,11 @@ public class TwitterStreamingSparkConsumer {
     }
 
 
-    public static void consume() {
+    public static void consume(String hashtag) {
         SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("TwitterApp");
         JavaStreamingContext streamingContext = new JavaStreamingContext(conf, Durations.seconds(10));
+
+        Collection<String> topics = Arrays.asList(hashtag.startsWith("#") ? hashtag.substring(1) : hashtag);
 
         final JavaInputDStream<ConsumerRecord<String, String>> stream =
                 KafkaUtils.createDirectStream(
@@ -54,8 +60,12 @@ public class TwitterStreamingSparkConsumer {
 
         JavaPairDStream<String, String> jPairDStream =  stream.mapToPair(pairFunction);
 
+        String key;
+        String index = key = hashtag.startsWith("#") ? hashtag.substring(1) : hashtag;
+
         jPairDStream.foreachRDD(jPairRDD -> {
             jPairRDD.foreach(rdd -> {
+                elasticsearchRepository.save(rdd._2, index, key);
                 System.out.println("value= "+rdd._2());
             });
         });
