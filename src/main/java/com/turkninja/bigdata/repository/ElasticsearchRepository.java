@@ -1,7 +1,9 @@
 package com.turkninja.bigdata.repository;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.turkninja.bigdata.consumer.TwitterStreamingSparkConsumer;
 import com.turkninja.bigdata.model.Tweet;
+import org.apache.log4j.Logger;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.settings.Settings;
@@ -14,6 +16,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 public class ElasticsearchRepository {
+    static Logger logger = Logger.getLogger(ElasticsearchRepository.class);
 
 
     private Client client;
@@ -23,7 +26,7 @@ public class ElasticsearchRepository {
             client = new PreBuiltTransportClient(Settings.builder().put("cluster.name", "turkninja").put("node.name", "node-1").build())
                     .addTransportAddress(new TransportAddress(InetAddress.getByName("127.0.0.1"), 9300));
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+            logger.error("error while creating elasticsearch client");
         }
     }
 
@@ -38,7 +41,7 @@ public class ElasticsearchRepository {
                     .setSource( mapper.writeValueAsBytes(tweet), XContentType.JSON)
                             .get();
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("error while saving tweet data");
         }
 
     }
